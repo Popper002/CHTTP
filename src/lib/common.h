@@ -8,7 +8,7 @@
 #include <time.h>
 #include <sys/signal.h>
 #include <signal.h>
-
+#include <netinet/in.h>
 #ifndef TEST_ERROR
 
 #define TEST_ERROR                                                             \
