@@ -18,9 +18,9 @@ void *handle_client_connection(void *args)
         char *file_path = path[0] == '/' ? path + 1 : path;
         char full_path[512];
         if (strlen(file_path) == 0)
-            snprintf(full_path, sizeof(full_path), "src/index.html");
+            snprintf(full_path, sizeof(full_path), "www/index.html");
         else
-            snprintf(full_path, sizeof(full_path), "src/%s", file_path);
+            snprintf(full_path, sizeof(full_path), "www/%s", file_path);
 
         FILE *fp = fopen(full_path, "rb");
         if (fp)
