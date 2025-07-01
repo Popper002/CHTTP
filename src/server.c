@@ -1,28 +1,99 @@
 #include "lib/common.h"
-void*  handle_client_connection(void* args)
+void *handle_client_connection(void *args)
 {
     thread_args_t *t_args = (thread_args_t *)args;
     int client_fd = t_args->client_fd;
     char buffer[1024] = {0};
-    ssize_t valread = read(client_fd, buffer, 1024-1);
+    ssize_t valread = read(client_fd, buffer, 1024 - 1);
 
     printf("RECEIVED ON PORT %d\n%s\nEND MSG\n", t_args->port, buffer);
+
+    // GET implementation
+    char method[8], path[256];
+    sscanf(buffer, "%7s %255s", method, path);
+
+    if (strcmp(method, "GET") == 0)
+    {
+        // clean up the string
+        char *file_path = path[0] == '/' ? path + 1 : path;
+        char full_path[512];
+        if (strlen(file_path) == 0)
+            snprintf(full_path, sizeof(full_path), "src/index.html");
+        else
+            snprintf(full_path, sizeof(full_path), "src/%s", file_path);
+
+        FILE *fp = fopen(full_path, "rb");
+        if (fp)
+        {
+            fseek(fp, 0, SEEK_END);
+            long file_sz = ftell(fp);
+            fseek(fp, 0, SEEK_SET);
+
+            const char *content_type = "text/plain";
+            if (strstr(file_path, ".html"))
+                content_type = "text/html";
+            else if (strstr(file_path, ".css"))
+                content_type = "text/css";
+            else if (strstr(file_path, ".js"))
+                content_type = "application/javascript";
+            else if (strstr(file_path, ".png"))
+                content_type = "image/png";
+            else if (strstr(file_path, ".jpg") || strstr(file_path, ".jpeg"))
+                content_type = "image/jpeg";
+
+            // send HTTP header
+            dprintf(client_fd, "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\nContent-Type: %s\r\n\r\n", file_sz, content_type);
+            printf("\nDEBUG-->HTTP/1.1 200 OK\r\nContent-Length: %ld\r\nContent-Type: %s\r\n\r\n", file_sz, content_type);
+            // send file content
+
+            char filebuf[1024];
+            size_t n;
+            while ((n = fread(filebuf, 1, sizeof(filebuf), fp)) > 0)
+            {
+                send(client_fd, filebuf, n, 0);
+            }
+            fclose(fp);
+        }
+        else
+        {
+            // 404
+
+            const char *notfound = "HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nContent-Type: text/plain\r\n\r\n404 Not Found";
+            send(client_fd, notfound, strlen(notfound), 0);
+        }
+    }
+    else
+    {
+        // Bad request
+        const char *badreq = "HTTP/1.1 400 Bad Request\r\nContent-Length: 11\r\nContent-Type: text/plain\r\n\r\nBad Request";
+        send(client_fd, badreq, strlen(badreq), 0);
+    }
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    time_t now = tv.tv_sec;
+    struct tm tm_info;
+    localtime_r(&now, &tm_info);
+    char timebuf[32];
+    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm_info);
 
     // Logging thread-safe
     pthread_mutex_lock(t_args->log_file_mutex);
     FILE *fp = fopen(t_args->log_path, "a");
-    if (fp) {
-        fprintf(fp, "PORT %d: %s\n", t_args->port, buffer);
+    if (fp)
+    {
+        fprintf(fp, "[TIMESTAMP : %s ] PORT %d: %s\n", timebuf, t_args->port, buffer);
         fclose(fp);
     }
     pthread_mutex_unlock(t_args->log_file_mutex);
 
-    send(client_fd, "OK", strlen("OK"), 0);
+    // send(client_fd, "OK", strlen("OK"), 0);
     close(client_fd);
     free(t_args);
     return NULL;
 }
-int open_connection(int port, pthread_mutex_t* log_file_mutex, char* log_path)
+int open_connection(int port, pthread_mutex_t *log_file_mutex, char *log_path)
 {
     if (port < 0)
     {
@@ -99,14 +170,15 @@ int open_connection(int port, pthread_mutex_t* log_file_mutex, char* log_path)
             TEST_ERROR;
             return errno;
         }
-        t_args->port =port; 
-        t_args->client_fd = new_Socket_fd; 
-        t_args->log_file_mutex = log_file_mutex; 
-        strncpy(t_args->log_path, log_path, sizeof(t_args->log_path)-1); //exclude the null terminator 
+        t_args->port = port;
+        t_args->client_fd = new_Socket_fd;
+        t_args->log_file_mutex = log_file_mutex;
+        strncpy(t_args->log_path, log_path, sizeof(t_args->log_path) - 1);
+        t_args->log_path[sizeof(t_args->log_path) - 1] = '\0'; // exclude the null terminator
 
-        pthread_t tid; 
-        pthread_create(&tid, NULL, handle_client_connection, t_args); 
-        pthread_detach(tid); 
+        pthread_t tid;
+        pthread_create(&tid, NULL, handle_client_connection, t_args);
+        pthread_detach(tid);
     }
 
     close(sock_fd);
@@ -173,7 +245,7 @@ int main(int argc, char const *argv[])
     int port = atoi(argv[1]);
     int res;
     pthread_mutex_t log_file_mutex = PTHREAD_MUTEX_INITIALIZER;
-    res = open_connection(port, &log_file_mutex, (char*)argv[2]);
+    res = open_connection(port, &log_file_mutex, (char *)argv[2]);
     pthread_mutex_destroy(&log_file_mutex);
 
     return 0;

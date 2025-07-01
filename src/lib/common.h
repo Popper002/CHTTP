@@ -9,6 +9,7 @@
 #include <sys/signal.h>
 #include <signal.h>
 #include <netinet/in.h>
+#include <sys/time.h>
 #ifndef TEST_ERROR
 
 #define TEST_ERROR                                                             \
@@ -23,7 +24,7 @@
  */
  #endif 
 
- typedef struct 
+typedef struct 
 {
      int client_fd; 
      int port; 
