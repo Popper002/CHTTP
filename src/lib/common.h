@@ -25,8 +25,9 @@
 
  typedef struct 
 {
-     char file_path[512]; 
-     char keyword[128];
+     int client_fd; 
+     int port; 
+     char buffer[1024];
      pthread_mutex_t* log_file_mutex; 
      char log_path[512]; 
 }thread_args_t;
